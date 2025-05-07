@@ -469,7 +469,13 @@ def main():
     read_jobs = []
 
     for ti in range(targets_df.shape[0]):
+        
         genome_cov_file = targets_df["file"].iloc[ti]
+
+        if not os.path.isfile(genome_cov_file):
+            print("Skipping non-existing coverage file %s" % genome_cov_file, file=sys.stderr)
+            continue
+                    
         seqs_cov_stem = "%s/%d" % (seqs_cov_dir, ti)
         seqs_cov_file = "%s.h5" % seqs_cov_stem
 

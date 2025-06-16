@@ -125,6 +125,36 @@ def dna_1hot_index(seq: str, n_sample: bool = False):
 
     return seq_code
 
+def reg_1hot_index(seq: str):
+    """Convert the mask of regulatory elements to an index encoding.
+
+    Args:
+      seq (str): mask of regulatory elements.
+      n_sample (bool):  sample ABCDE for N
+
+    Returns:
+      seq_code (np.array): Index encoding of the sequence.
+    """
+    def decode_reg_label_char(char):
+        ascii_val = ord(char)
+        if 'A' <= char <= 'Z':
+            encoded_value = ascii_val - 65
+        elif 'a' <= char <= 'z':
+            encoded_value = ascii_val - 71
+        else:
+            raise ValueError(f"Invalid encoded character: {char}")
+        return encoded_value
+
+    seq_len = len(seq)
+    seq = seq.upper()
+
+    # map nt's to a len(seq) of 0,1,2,3
+    seq_code = np.zeros(seq_len, dtype="uint8")
+
+    for i in range(seq_len):
+        seq_code[i] = decode_reg_label_char(seq[i])
+
+    return seq_code
 
 def hot1_augment(Xb, fwdrc: bool = True, shift: int = 0):
     """Transform a batch of one hot coded sequences to augment training.

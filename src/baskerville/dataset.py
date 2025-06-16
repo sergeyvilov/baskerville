@@ -30,6 +30,7 @@ for device in gpu_devices:
 # TFRecord constants
 TFR_INPUT = "sequence"
 TFR_OUTPUT = "target"
+REGMASK_INPUT = "regmask"
 
 
 def file_to_records(filename: str):
@@ -61,6 +62,7 @@ class SeqDataset:
         mode: str = "eval",
         tfr_pattern: str = None,
         targets_slice_file: str = None,
+        use_regseq_mask: bool = False,
     ):
         self.data_dir = data_dir
         self.split_label = split_label
@@ -69,6 +71,7 @@ class SeqDataset:
         self.seq_length_crop = seq_length_crop
         self.mode = mode
         self.tfr_pattern = tfr_pattern
+        self.use_regseq_mask = use_regseq_mask
 
         # read data parameters
         data_stats_file = "%s/statistics.json" % self.data_dir
@@ -121,6 +124,9 @@ class SeqDataset:
                 TFR_OUTPUT: tf.io.FixedLenFeature([], tf.string),
             }
 
+            if self.use_regseq_mask:
+                features[REGMASK_INPUT] = tf.io.FixedLenFeature([], tf.string)
+
             # parse example into features
             parsed_features = tf.io.parse_single_example(
                 example_protos, features=features
@@ -135,11 +141,22 @@ class SeqDataset:
                     sequence = sequence[:, :-1]  # drop N
                 else:
                     sequence = tf.reshape(sequence, [self.seq_length, self.seq_depth])
+                if self.use_regseq_mask:
+                    regmask = tf.io.decode_raw(parsed_features[REGMASK_INPUT], tf.uint8)
+                    regmask = tf.reshape(regmask, [self.seq_length])
+
+                    regmask = tf.stack([regmask == 2**p for p in range(0,5)],axis=0)
+                    regmask = tf.cast(regmask,tf.uint8)
+                    regmask = tf.transpose(regmask)
+
+                    #regmask=tf.cast(regmask>0,tf.uint8)
+                    #regmask = tf.transpose([regmask])
+
+                    sequence = tf.concat([sequence,regmask],axis=1)
                 if self.seq_length_crop > 0:
                     crop_len = (self.seq_length - self.seq_length_crop) // 2
                     sequence = sequence[crop_len:-crop_len, :]
                 sequence = tf.cast(sequence, tf.float32)
-
             # decode targets
             targets = tf.io.decode_raw(parsed_features[TFR_OUTPUT], tf.float16)
             if not raw:
@@ -184,6 +201,9 @@ class SeqDataset:
         else:
             # flat mix files
             dataset = dataset.flat_map(file_to_records)
+
+        #for first_file in dataset.take(1):
+        #    print(first_file)  # If it's (filepath, label), this prints each tensor
 
         # map parser across files
         dataset = dataset.map(self.generate_parser())

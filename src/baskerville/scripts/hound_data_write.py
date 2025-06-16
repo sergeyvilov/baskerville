@@ -91,6 +91,13 @@ def main():
         type="int",
         help="Extend sequences on each side [Default: %default]",
     )
+    parser.add_option(
+        "--fasta_reg",
+        dest="fasta_reg",
+        default=None,
+        type="str",
+        help="FASTA file with regulatory elements",
+    )
     (options, args) = parser.parse_args()
 
     if len(args) != 4:
@@ -175,6 +182,9 @@ def main():
     # open FASTA
     fasta_open = pysam.Fastafile(fasta_file)
 
+    if options.fasta_reg:
+        fasta_reg_open = pysam.Fastafile(options.fasta_reg)
+
     # define options
     tf_opts = tf.io.TFRecordOptions(compression_type="ZLIB")
 
@@ -209,6 +219,11 @@ def main():
                 "target": feature_bytes(targets_si),
             }
 
+            if options.fasta_reg:
+                reg_mask = fetch_dna(fasta_reg_open, mseq.chr, mseq_start, mseq_end) #
+                reg_1hot = dna.reg_1hot_index(reg_mask)  # more efficient
+                features_dict['regmask'] = feature_bytes(reg_1hot)
+
             # add unmappability
             if options.umap_tfr:
                 features_dict["umap"] = feature_bytes(unmap_mask[msi, :])
@@ -220,6 +235,9 @@ def main():
             writer.write(example.SerializeToString())
 
         fasta_open.close()
+
+        if options.fasta_reg:
+            fasta_reg_open.close()
 
 
 def tround(a, decimals):

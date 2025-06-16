@@ -986,8 +986,9 @@ class StochasticReverseComplement(tf.keras.layers.Layer):
 
     def call(self, seq_1hot, training=None):
         if training:
-            rc_seq_1hot = tf.gather(seq_1hot, [3, 2, 1, 0], axis=-1)
-            rc_seq_1hot = tf.reverse(rc_seq_1hot, axis=[1])
+            rc_seq_1hot = tf.gather(seq_1hot, [3, 2, 1, 0], axis=-1) #make complement
+            rc_seq_1hot = tf.concat([rc_seq_1hot,seq_1hot[:,:,4:]],axis=-1) #add channels not encoding DNA
+            rc_seq_1hot = tf.reverse(rc_seq_1hot, axis=[1]) #reverse everything
             reverse_bool = tf.random.uniform(shape=[]) > 0.5
             src_seq_1hot = tf.cond(reverse_bool, lambda: rc_seq_1hot, lambda: seq_1hot)
             return src_seq_1hot, reverse_bool

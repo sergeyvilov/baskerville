@@ -115,6 +115,7 @@ def main():
         if "strand_pair" in targets_df.columns:
             strand_pairs.append(np.array(targets_df.strand_pair))
 
+        print('creating train datasets')
         # load train data
         train_data.append(
             dataset.SeqDataset(
@@ -124,8 +125,11 @@ def main():
                 shuffle_buffer=params_train.get("shuffle_buffer", 128),
                 mode="train",
                 tfr_pattern=args.tfr_train,
+                use_regseq_mask=params_model.get('use_regseq_mask',None),
             )
         )
+
+        print('creating eval datasets')
 
         # load eval data
         eval_data.append(
@@ -135,6 +139,7 @@ def main():
                 batch_size=params_train["batch_size"],
                 mode="eval",
                 tfr_pattern=args.tfr_eval,
+                use_regseq_mask=params_model.get('use_regseq_mask',None),
             )
         )
 

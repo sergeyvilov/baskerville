@@ -29,6 +29,7 @@ import pandas as pd
 
 from baskerville import data
 from baskerville.helpers import utils
+from glob import glob
 
 try:
     import slurm
@@ -236,6 +237,13 @@ def main():
         default=False,
         action="store_true",
         help="Apply old target transforms [Default: %default]",
+    )
+    parser.add_option(
+        "--fasta_reg",
+        dest="fasta_reg",
+        default=None,
+        type="str",
+        help="FASTA file with regulatory elements following encoding: 'pELS': 'A', 'dELS': 'B', 'PLS': 'C', 'CTCF-only': 'D', 'DNase-H3K4me3': 'E'",
     )
     (options, args) = parser.parse_args()
 
@@ -472,10 +480,6 @@ def main():
 
         genome_cov_file = targets_df["file"].iloc[ti]
 
-        if not os.path.isfile(genome_cov_file):
-            print("Skipping non-existing coverage file %s" % genome_cov_file, file=sys.stderr)
-            continue
-
         seqs_cov_stem = "%s/%d" % (seqs_cov_dir, ti)
         seqs_cov_file = "%s.h5" % seqs_cov_stem
 
@@ -522,7 +526,7 @@ def main():
                     name="read_t%d" % ti,
                     out_file="%s.out" % seqs_cov_stem,
                     err_file="%s.err" % seqs_cov_stem,
-                    queue="cpu_p",
+                    queue="cpu_normal",
                     mem=15000,
                     time="12:0:0",
                 )
@@ -535,6 +539,8 @@ def main():
             read_jobs, options.processes, verbose=True, launch_sleep=1, update_sleep=5
         )
 
+    print(len(glob(seqs_cov_dir + '/*.h5')),targets_df.shape[0])
+    assert len(glob(seqs_cov_dir + '/*.h5'))==targets_df.shape[0]
     ################################################################
     # write TF Records
     ################################################################
@@ -575,6 +581,8 @@ def main():
                     cmd += " --umap_tfr"
                 if options.umap_bed is not None:
                     cmd += " -u %s" % unmap_npy
+                if options.fasta_reg is not None:
+                    cmd += " --fasta_reg %s" % options.fasta_reg
 
                 cmd += " %s" % fasta_file
                 cmd += " %s" % seqs_bed_file
@@ -591,7 +599,7 @@ def main():
                         name="write_%s-%d" % (fold_set, tfr_i),
                         out_file="%s.out" % tfr_stem,
                         err_file="%s.err" % tfr_stem,
-                        queue="cpu_p",
+                        queue="cpu_normal",
                         mem=15000,
                         time="12:0:0",
                     )

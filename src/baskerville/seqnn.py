@@ -37,10 +37,15 @@ class SeqNN:
 
     def __init__(self, params: dict):
         self.set_defaults()
+        if params.get('use_regseq_mask',False)==True:
+            self.seq_depth_total = 9 #A,C,T,G + reg seq mask encoding
+        else:
+            self.seq_depth_total = 4 #A,C,T,G
         for key, value in params.items():
             self.__setattr__(key, value)
         self.build_model()
         self.ensemble = None
+        print(params)
 
     def set_defaults(self):
         """Set default parameters.
@@ -134,7 +139,7 @@ class SeqNN:
 
         ###################################################
         # inputs
-        sequence = tf.keras.Input(shape=(self.seq_length, 4), name="sequence")
+        sequence = tf.keras.Input(shape=(self.seq_length, self.seq_depth_total), name="sequence")
         current = sequence
 
         # augmentation
@@ -174,6 +179,7 @@ class SeqNN:
 
             # build blocks
             for bi, block_params in enumerate(head):
+                print('head_params',block_params)
                 current = self.build_block(current, block_params)
 
             if hi < len(self.strand_pair):
@@ -199,6 +205,8 @@ class SeqNN:
         for ho in self.head_output:
             self.models.append(tf.keras.Model(inputs=sequence, outputs=ho))
         self.model = self.models[0]
+
+        print('output_shape',self.models[-1].output_shape)
 
         # add adapter
         if hasattr(self, "adapter"):
@@ -240,7 +248,7 @@ class SeqNN:
         shift_bool = len(ensemble_shifts) > 1 or ensemble_shifts[0] != 0
         if ensemble_rc or shift_bool:
             # sequence input
-            sequence = tf.keras.Input(shape=(self.seq_length, 4), name="sequence")
+            sequence = tf.keras.Input(shape=(self.seq_length, self.seq_depth_total), name="sequence")
             sequences = [sequence]
 
             if shift_bool:
@@ -281,7 +289,7 @@ class SeqNN:
     def build_sad(self):
         """Sum across length axis, in graph."""
         # sequence input
-        sequence = tf.keras.Input(shape=(self.seq_length, 4), name="sequence")
+        sequence = tf.keras.Input(shape=(self.seq_length, self.seq_depth_total), name="sequence")
 
         # predict
         predictions = self.model(sequence)
@@ -297,7 +305,7 @@ class SeqNN:
         """Slice and/or sum across tasks, in graph."""
         if target_slice is not None or target_sum:
             # sequence input
-            sequence = tf.keras.Input(shape=(self.seq_length, 4), name="sequence")
+            sequence = tf.keras.Input(shape=(self.seq_length, self.seq_depth_total), name="sequence")
 
             # predict
             predictions = self.model(sequence)
@@ -330,7 +338,7 @@ class SeqNN:
             model = self.model
 
         # sequence input
-        sequence = tf.keras.Input(shape=(self.seq_length, 4), name="sequence")
+        sequence = tf.keras.Input(shape=(self.seq_length, self.seq_depth_total), name="sequence")
 
         # predict and downcast
         preds = model(sequence)
@@ -876,7 +884,9 @@ class SeqNN:
         if trunk:
             self.model_trunk.load_weights(model_file)
         else:
-            self.models[head_i].load_weights(model_file)
+            for head_i, model in enumerate(self.models):
+                self.models[head_i].load_weights(model_file + f'/model{head_i}_best.h5')
+            #self.models[head_i].load_weights(model_file)
             self.model = self.models[head_i]
 
     def save(self, model_file, trunk=False):
@@ -907,7 +917,7 @@ class SeqNN:
             model = self.model
 
         # sequence input
-        sequence = tf.keras.Input(shape=(self.seq_length, 4), name="sequence")
+        sequence = tf.keras.Input(shape=(self.seq_length, self.seq_depth_total), name="sequence")
 
         # predict and step across positions
         preds = model(sequence)

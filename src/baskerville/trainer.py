@@ -184,6 +184,7 @@ class Trainer:
                 ]
             else:
                 num_targets = model.output_shape[-1]
+                print('num_targets',num_targets)
                 model_metrics = [metrics.PearsonR(num_targets), metrics.R2(num_targets)]
 
             model.compile(
@@ -284,6 +285,10 @@ class Trainer:
                 with tf.GradientTape() as tape:
                     pred = seqnn_model.models[0](x, training=True)
                     loss = self.loss_fn(y, pred) + sum(seqnn_model.models[0].losses)
+                if tf.math.is_nan(loss):
+                    raise ValueError('Loss is nan at step 0')
+                else:
+                    print('step 0 success')
                 train_loss[0](loss)
                 train_r[0](y, pred)
                 train_r2[0](y, pred)
@@ -309,6 +314,10 @@ class Trainer:
                     with tf.GradientTape() as tape:
                         pred = seqnn_model.models[1](x, training=True)
                         loss = self.loss_fn(y, pred) + sum(seqnn_model.models[1].losses)
+                    if tf.math.is_nan(loss):
+                        raise ValueError('Loss is nan at step 1')
+                    else:
+                        print('step 1 success')
                     train_loss[1](loss)
                     train_r[1](y, pred)
                     train_r2[1](y, pred)
@@ -411,7 +420,7 @@ class Trainer:
                 model=seqnn_model.models[di], optimizer=self.optimizer
             )
             ckpt_dir = "%s/model%d" % (self.out_dir, di)
-            manager = tf.train.CheckpointManager(ckpt, ckpt_dir, max_to_keep=1)
+            manager = tf.train.CheckpointManager(ckpt, ckpt_dir, max_to_keep=2)
             if manager.latest_checkpoint:
                 ckpt.restore(manager.latest_checkpoint)
                 ckpt_end = 5 + manager.latest_checkpoint.find("ckpt-")
@@ -465,10 +474,21 @@ class Trainer:
                 )  # Create Keras Progbar
                 for didx, di in enumerate(self.dataset_indexes):
                     x, y = safe_next(train_data_iters[di])
+                    print('x',x.shape,np.unique(x.numpy()))
+                    print('y',y.shape,np.unique(y.numpy()))
+
+                    if np.isnan(x.numpy()).sum():
+                        print('NAN in targets')
+
+                    if np.isnan(y.numpy()).sum():
+                        print('NAN in sequence')
                     if self.strategy is None:
                         if di == 0:
+                            print('step 0')
                             train_step0(x, y)
                         else:
+                            print('step 1')
+
                             train_step1(x, y)
                     else:
                         if di == 0:
@@ -479,6 +499,8 @@ class Trainer:
                         print("Successful first step!", flush=True)
                         first_step = False
                     prog_bar.add(1)
+
+                    print(f"Step {didx:,d}/{len(self.dataset_indexes):,d}, epoch {ei:,d} - {int(time.time() - t0):,d}s", flush=True)
 
                     if (ei == epoch_start) and (didx < 1000) and (didx % 100 == 1):
                         mem = gpu_memory_callback.on_batch_end()
@@ -589,6 +611,8 @@ class Trainer:
                     with tf.GradientTape() as tape:
                         pred = model(x, training=True)
                         loss = self.loss_fn(y, pred) + sum(model.losses)
+                        if tf.math.is_nan(loss):
+                                raise ValueError('Loss is nan')
                         scaled_loss = self.optimizer.get_scaled_loss(loss)
                     train_loss(loss)
                     train_r(y, pred)
@@ -608,6 +632,8 @@ class Trainer:
                     with tf.GradientTape() as tape:
                         pred = model(x, training=True)
                         loss = self.loss_fn(y, pred) + sum(model.losses)
+                        if tf.math.is_nan(loss):
+                                raise ValueError('Loss is nan')
                     train_loss(loss)
                     train_r(y, pred)
                     train_r2(y, pred)
@@ -637,6 +663,8 @@ class Trainer:
                     loss_batch = tf.reduce_mean(loss_batch_len, axis=-1)
                     loss = tf.reduce_sum(loss_batch) / self.batch_size
                     loss += sum(model.losses) / self.num_gpu
+                    if tf.math.is_nan(loss):
+                            raise ValueError('Loss is nan')
                 train_r(y, pred)
                 train_r2(y, pred)
                 gradients = tape.gradient(loss, model.trainable_variables)
@@ -666,7 +694,7 @@ class Trainer:
 
         # checkpoint manager
         ckpt = tf.train.Checkpoint(model=seqnn_model.model, optimizer=self.optimizer)
-        manager = tf.train.CheckpointManager(ckpt, self.out_dir, max_to_keep=1)
+        manager = tf.train.CheckpointManager(ckpt, self.out_dir, max_to_keep=2)
         if manager.latest_checkpoint:
             ckpt.restore(manager.latest_checkpoint)
             ckpt_end = 5 + manager.latest_checkpoint.find("ckpt-")
@@ -720,6 +748,8 @@ class Trainer:
                         mem = gpu_memory_callback.on_batch_end()
                         with open(file_path, "a") as file:
                             file.write("%d\t%d\t%.2f\n" % (ei, si, mem))
+
+                    print(f"Step {si:,d}/{self.train_epoch_batches[0]:,d}, epoch {ei:,d} - {int(time.time() - t0):,d}s", flush=True)
 
                 # evaluate
                 for x, y in self.eval_data[0].dataset:

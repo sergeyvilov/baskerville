@@ -145,7 +145,7 @@ class SeqDataset:
                     regmask = tf.io.decode_raw(parsed_features[REGMASK_INPUT], tf.uint8)
                     regmask = tf.reshape(regmask, [self.seq_length])
 
-                    regmask = tf.stack([regmask == 2**p for p in range(0,5)],axis=0)
+                    regmask = tf.stack([regmask & 2**p>0 for p in range(0,5)],axis=0)
                     regmask = tf.cast(regmask,tf.uint8)
                     regmask = tf.transpose(regmask)
 
